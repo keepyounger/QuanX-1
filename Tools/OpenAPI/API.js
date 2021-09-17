@@ -33,7 +33,7 @@ function HTTP(defaultOptions = {
         isNode
     } = ENV();
     const methods = ["GET", "POST", "PUT", "DELETE", "HEAD", "OPTIONS", "PATCH"];
-    const URL_REGEX = /https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)/
+    const URL_REGEX = /https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)/;
 
     function send(method, options) {
         options = typeof options === "string" ? {
@@ -119,7 +119,7 @@ function HTTP(defaultOptions = {
             }) :
             worker
         ).then((resp) => events.onResponse(resp));
-    }
+    };
 
     const http = {};
     methods.forEach(
@@ -142,10 +142,12 @@ function API(name = "untitled", debug = false) {
         constructor(name, debug) {
             this.name = name;
             this.debug = debug;
-
+			
+			this.logs = [];
+			
             this.http = HTTP();
             this.env = ENV();
-
+			
             this.node = (() => {
                 if (isNode) {
                     const fs = require("fs");
@@ -327,12 +329,19 @@ function API(name = "untitled", debug = false) {
                         body: (subtitle ? subtitle + "\n" : "") + content_,
                     });
                 } else {
-                    console.log(`${title}\n${subtitle}\n${content_}\n\n`);
+					const msg = subtitle + content;
+					const noti = require('./sendNotify');
+					noti.sendNotify(title, msg);
                 }
             }
         }
 
         // other helper functions
+		msg(...t) {
+			t.length > 0 && (this.logs = [...this.logs, ...t]);
+			this.log(t);
+		}
+		
         log(msg) {
             if (this.debug) console.log(`[${this.name}] LOG: ${this.stringify(msg)}`);
         }
