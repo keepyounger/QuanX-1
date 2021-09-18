@@ -9,16 +9,12 @@ function ENV() {
     const isSurge = typeof $httpClient !== "undefined" && !isLoon;
     const isJSBox = typeof require == "function" && typeof $ui != "undefined";
     const isNode = typeof require == "function" && !isJSBox;
-    const isRequest = typeof $request !== "undefined";
-    const isScriptable = typeof importModule !== "undefined";
     return {
         isQX,
         isLoon,
         isSurge,
         isNode,
-        isJSBox,
-        isRequest,
-        isScriptable
+        isJSBox
     };
 }
 
@@ -29,7 +25,6 @@ function HTTP(defaultOptions = {
         isQX,
         isLoon,
         isSurge,
-        isScriptable,
         isJSBox,
         isNode
     } = ENV();
@@ -103,7 +98,7 @@ function HTTP(defaultOptions = {
                   }
                 })
             });
-        } else if (isScriptable) {
+        } else if (isNode) {
             const request = new Request(options.url);
             request.method = method;
             request.headers = options.headers;
@@ -157,8 +152,7 @@ function API(name = "untitled", debug = false) {
         isLoon,
         isSurge,
         isNode,
-        isJSBox,
-        isScriptable
+        isJSBox
     } = ENV();
     return new(class {
         constructor(name, debug) {
@@ -396,12 +390,6 @@ function API(name = "untitled", debug = false) {
         done(value = {}) {
             if (isQX || isLoon || isSurge) {
                 $done(value);
-            } else if (isNode && !isJSBox) {
-                if (typeof $context !== "undefined") {
-                    $context.headers = value.headers;
-                    $context.statusCode = value.statusCode;
-                    $context.body = value.body;
-                }
             }
         }
         
