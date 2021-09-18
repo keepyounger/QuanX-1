@@ -7,7 +7,7 @@ function ENV() {
     const isQX = typeof $task !== "undefined";
     const isLoon = typeof $loon !== "undefined";
     const isSurge = typeof $httpClient !== "undefined" && !isLoon;
-    const isJSBox = typeof require == "function" && typeof $jsbox != "undefined";
+    const isJSBox = typeof require == "function" && typeof $ui != "undefined";
     const isNode = typeof require == "function" && !isJSBox;
     const isRequest = typeof $request !== "undefined";
     const isScriptable = typeof importModule !== "undefined";
@@ -30,6 +30,7 @@ function HTTP(defaultOptions = {
         isLoon,
         isSurge,
         isScriptable,
+        isJSBox,
         isNode
     } = ENV();
     const methods = ["GET", "POST", "PUT", "DELETE", "HEAD", "OPTIONS", "PATCH"];
@@ -80,6 +81,27 @@ function HTTP(defaultOptions = {
                             body,
                         });
                 });
+            });
+        } else if (isJSBox) {
+            var url = options.url;
+            var headers = options.headers;
+            var body = options.body;
+            worker = new Promise((resolve, reject) => {
+                $http.request({
+                  method: method,
+                  url: url,
+                  header: headers,
+                  body: body,
+                  handler: function(resp) {
+                      if (resp.error) reject(resp.error);
+                      else
+                          resolve({
+                              statusCode: resp.response.statusCode,
+                              headers: resp.response.headers,
+                              body: resp.data
+                          });
+                  }
+                })
             });
         } else if (isScriptable) {
             const request = new Request(options.url);
@@ -179,6 +201,7 @@ function API(name = "untitled", debug = false) {
             if (isQX) this.cache = JSON.parse($prefs.valueForKey(this.name) || "{}");
             if (isLoon || isSurge)
                 this.cache = JSON.parse($persistentStore.read(this.name) || "{}");
+            if (isJSBox) this.cache = JSON.parse($cache.get(this.name) || "{}");
 
             if (isNode) {
                 // create a json for root cache
@@ -218,6 +241,7 @@ function API(name = "untitled", debug = false) {
             const data = JSON.stringify(this.cache, null, 2);
             if (isQX) $prefs.setValueForKey(data, this.name);
             if (isLoon || isSurge) $persistentStore.write(data, this.name);
+            if (isJSBox) $cache.set(this.name, data);
             if (isNode) {
                 this.node.fs.writeFileSync(
                     `${this.name}.json`,
@@ -249,6 +273,9 @@ function API(name = "untitled", debug = false) {
                 if (isNode) {
                     this.root[key] = data;
                 }
+                if (isJSBox) {
+                    $cache.set(key, data);
+                }
             } else {
                 this.cache[key] = data;
             }
@@ -268,6 +295,9 @@ function API(name = "untitled", debug = false) {
                 if (isNode) {
                     return this.root[key];
                 }
+                if (isJSBox) {
+                    return $cache.get(key);
+                }
             } else {
                 return this.cache[key];
             }
@@ -285,6 +315,9 @@ function API(name = "untitled", debug = false) {
                 }
                 if (isNode) {
                     delete this.root[key];
+                }
+                if (isJSBox) {
+                    $cache.remove(key);
                 }
             } else {
                 delete this.cache[key];
@@ -317,22 +350,24 @@ function API(name = "untitled", debug = false) {
                     $notification.post(title, subtitle, content, opts);
                 }
             }
-            if (isNode || isScriptable) {
+            if (isJSBox) {
                 const content_ =
                     content +
                     (openURL ? `\n点击跳转: ${openURL}` : "") +
                     (mediaURL ? `\n多媒体: ${mediaURL}` : "");
-                if (isJSBox) {
-                    const push = require("push");
-                    push.schedule({
-                        title: title,
-                        body: (subtitle ? subtitle + "\n" : "") + content_,
-                    });
-                } else {
-					const msg = subtitle + content;
-					const noti = require('./sendNotify');
-					noti.sendNotify(title, msg);
-                }
+                $push.schedule({
+                    title: title,
+                    body: subtitle + content_
+                });
+            }
+            if (isNode) {
+                const content_ =
+                    content +
+                    (openURL ? `\n点击跳转: ${openURL}` : "") +
+                    (mediaURL ? `\n多媒体: ${mediaURL}` : "");
+                const msg = subtitle + content_;
+                const noti = require('./sendNotify');
+                noti.sendNotify(title, msg);
             }
         }
 
@@ -369,7 +404,22 @@ function API(name = "untitled", debug = false) {
                 }
             }
         }
-
+        
+        parse(object) {
+            if (typeof object === 'string' || object instanceof String)
+                try {
+                    return JSON.parse(object);
+                } catch (err) {
+                    this.msg("parse出错了");
+                }
+            else
+                try {
+                    return JSON.parse(JSON.stringify(object));
+                } catch (err) {
+                    this.msg("parse出错了");
+                }
+        }
+        
         stringify(obj_or_str) {
             if (typeof obj_or_str === 'string' || obj_or_str instanceof String)
                 return obj_or_str;
@@ -377,7 +427,7 @@ function API(name = "untitled", debug = false) {
                 try {
                     return JSON.stringify(obj_or_str, null, 2);
                 } catch (err) {
-                    return "[object Object]";
+                    this.msg("stringify出错了");
                 }
         }
     })(name, debug);
