@@ -320,10 +320,10 @@ function API(name = "untitled", debug = false) {
         }
 
         // notification
-        notify(title, subtitle = "", content = "", options = {}) {
+        notify(title, content = "", options = {}) {
             const openURL = options["open-url"];
             const mediaURL = options["media-url"];
-
+            const subtitle = "";
             if (isQX) $notify(title, subtitle, content, options);
             if (isSurge) {
                 $notification.post(
