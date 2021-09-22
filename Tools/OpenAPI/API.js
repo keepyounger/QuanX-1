@@ -3,171 +3,157 @@
  * @author: Peng-YM
  * https://github.com/Peng-YM/QuanX/blob/master/Tools/OpenAPI/README.md
  */
-function ENV() {
+
+function Env(name = "untitled") {
+    
     const isQX = typeof $task !== "undefined";
     const isLoon = typeof $loon !== "undefined";
     const isSurge = typeof $httpClient !== "undefined" && !isLoon;
     const isJSBox = typeof require == "function" && typeof $ui != "undefined";
     const isNode = typeof require == "function" && !isJSBox;
-    return {
-        isQX,
-        isLoon,
-        isSurge,
-        isNode,
-        isJSBox
-    };
-}
-
-function HTTP(defaultOptions = {
-    baseURL: ""
-}) {
-    const {
-        isQX,
-        isLoon,
-        isSurge,
-        isJSBox,
-        isNode
-    } = ENV();
-    const methods = ["GET", "POST", "PUT", "DELETE", "HEAD", "OPTIONS", "PATCH"];
-    const URL_REGEX = /https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)/;
-
-    function send(method, options) {
-        options = typeof options === "string" ? {
-            url: options
-        } : options;
-        const baseURL = defaultOptions.baseURL;
-        if (baseURL && !URL_REGEX.test(options.url || "")) {
-            options.url = baseURL ? baseURL + options.url : options.url;
+    
+    function HTTP() {
+        const methods = ["GET", "POST", "PUT", "DELETE", "HEAD", "OPTIONS", "PATCH"];
+    
+        function objectToUrlencoded(object) {
+            var str = "";
+            for (var i in object) {
+                var key = i;
+                var value = object[key];
+                str += key + "=" + value + "&";
+            }
+            return str;
         }
-        if (options.body && options.headers && !options.headers['Content-Type']) {
-            options.headers['Content-Type'] = 'application/x-www-form-urlencoded'
-        }
-        options = {
-            ...defaultOptions,
-            ...options
-        };
-        const timeout = options.timeout;
-        const events = {
-            ...{
-                onRequest: () => {},
-                onResponse: (resp) => resp,
-                onTimeout: () => {},
-            },
-            ...options.events,
-        };
-
-        events.onRequest(method, options);
-
-        let worker;
-        if (isQX) {
-            worker = $task.fetch({
-                method,
-                ...options
-            });
-        } else if (isLoon || isSurge || isNode) {
-            worker = new Promise((resolve, reject) => {
-                const request = isNode ? require("request") : $httpClient;
-                request[method.toLowerCase()](options, (err, response, body) => {
-                    if (err) reject(err);
-                    else
-                        resolve({
-                            statusCode: response.status || response.statusCode,
-                            headers: response.headers,
-                            body,
-                        });
+    
+        function send(method, options) {
+            options = typeof options === "string" ? {
+                url: options
+            } : options;
+            if (options.body && options.headers) {
+                if (!options.headers['Content-Type']) {
+                   options.headers['Content-Type'] = 'application/x-www-form-urlencoded';
+                }
+                var body = options.body;
+                if (typeof body === 'object' || body instanceof Object) {
+                    var contentType = options.headers['Content-Type'];
+                    if (contentType == 'application/x-www-form-urlencoded') {
+                        options.body = objectToUrlencoded(body);
+                    } else if (contentType == 'application/json') {
+                        options.body = JSON.stringify(body);
+                    }
+                }
+            }
+            const timeout = options.timeout;
+            const events = {
+                ...{
+                    onRequest: () => {},
+                    onResponse: (resp) => resp,
+                    onTimeout: () => {},
+                },
+                ...options.events,
+            };
+    
+            events.onRequest(method, options);
+    
+            let worker;
+            if (isQX) {
+                worker = $task.fetch({
+                    method,
+                    ...options
                 });
-            });
-        } else if (isJSBox) {
-            var url = options.url;
-            var headers = options.headers;
-            var body = options.body;
-            worker = new Promise((resolve, reject) => {
-                $http.request({
-                  method: method,
-                  url: url,
-                  header: headers,
-                  body: body,
-                  handler: function(resp) {
-                      if (resp.error) reject(resp.error);
-                      else
-                          resolve({
-                              statusCode: resp.response.statusCode,
-                              headers: resp.response.headers,
-                              body: resp.data
-                          });
-                  }
-                })
-            });
-        } else if (isNode) {
-            const request = new Request(options.url);
-            request.method = method;
-            request.headers = options.headers;
-            request.body = options.body;
-            worker = new Promise((resolve, reject) => {
-                request
-                    .loadString()
-                    .then((body) => {
-                        resolve({
-                            statusCode: request.response.statusCode,
-                            headers: request.response.headers,
-                            body,
-                        });
+            } else if (isLoon || isSurge || isNode) {
+                worker = new Promise((resolve, reject) => {
+                    const request = isNode ? require("request") : $httpClient;
+                    request[method.toLowerCase()](options, (err, response, body) => {
+                        if (err) reject(err);
+                        else
+                            resolve({
+                                statusCode: response.status || response.statusCode,
+                                headers: response.headers,
+                                body,
+                            });
+                    });
+                });
+            } else if (isJSBox) {
+                var url = options.url;
+                var headers = options.headers;
+                var body = options.body;
+                worker = new Promise((resolve, reject) => {
+                    $http.request({
+                        method: method,
+                        url: url,
+                        header: headers,
+                        body: body,
+                        handler: function(resp) {
+                            if (resp.error) reject(resp.error);
+                            else
+                                resolve({
+                                    statusCode: resp.response.statusCode,
+                                    headers: resp.response.headers,
+                                    body: resp.data
+                                });
+                        }
                     })
-                    .catch((err) => reject(err));
-            });
-        }
-
-        let timeoutid;
-        const timer = timeout ?
-            new Promise((_, reject) => {
-                timeoutid = setTimeout(() => {
-                    events.onTimeout();
-                    return reject(
-                        `${method} URL: ${options.url} exceeds the timeout ${timeout} ms`
-                    );
-                }, timeout);
-            }) :
-            null;
-
-        return (timer ?
-            Promise.race([timer, worker]).then((res) => {
-                clearTimeout(timeoutid);
-                return res;
-            }) :
-            worker
-        ).then((resp) => events.onResponse(resp));
-    };
-
-    const http = {};
-    methods.forEach(
-        (method) =>
-        (http[method.toLowerCase()] = (options) => send(method, options))
-    );
-    return http;
-}
-
-function API(name = "untitled", debug = false) {
-    const {
-        isQX,
-        isLoon,
-        isSurge,
-        isNode,
-        isJSBox
-    } = ENV();
+                });
+            } else if (isNode) {
+                const request = new Request(options.url);
+                request.method = method;
+                request.headers = options.headers;
+                request.body = options.body;
+                worker = new Promise((resolve, reject) => {
+                    request
+                        .loadString()
+                        .then((body) => {
+                            resolve({
+                                statusCode: request.response.statusCode,
+                                headers: request.response.headers,
+                                body,
+                            });
+                        })
+                        .catch((err) => reject(err));
+                });
+            }
+    
+            let timeoutid;
+            const timer = timeout ?
+                new Promise((_, reject) => {
+                    timeoutid = setTimeout(() => {
+                        events.onTimeout();
+                        return reject(
+                            `${method} URL: ${options.url} exceeds the timeout ${timeout} ms`
+                        );
+                    }, timeout);
+                }) :
+                null;
+    
+            return (timer ?
+                Promise.race([timer, worker]).then((res) => {
+                    clearTimeout(timeoutid);
+                    return res;
+                }) :
+                worker
+            ).then((resp) => events.onResponse(resp));
+        };
+    
+        const http = {};
+        methods.forEach(
+            (method) =>
+            (http[method.toLowerCase()] = (options) => send(method, options))
+        );
+        return http;
+    }
+    
     return new(class {
-        constructor(name, debug) {
+        constructor(name) {
             this.name = name;
-            this.debug = debug;
-			
-			this.logs = [];
-			
+            
+            this.logs = [];
+
             this.http = HTTP();
-            this.env = ENV();
-			
+
             this.node = (() => {
                 if (isNode) {
                     const fs = require("fs");
-
                     return {
                         fs,
                     };
@@ -178,19 +164,17 @@ function API(name = "untitled", debug = false) {
             this.initCache();
 
             const delay = (t, v) =>
-                new Promise(function (resolve) {
+                new Promise(function(resolve) {
                     setTimeout(resolve.bind(null, v), t);
                 });
 
-            Promise.prototype.delay = function (t) {
-                return this.then(function (v) {
+            Promise.prototype.delay = function(t) {
+                return this.then(function(v) {
                     return delay(t, v);
                 });
             };
         }
 
-        // persistence
-        // initialize cache
         initCache() {
             if (isQX) this.cache = JSON.parse($prefs.valueForKey(this.name) || "{}");
             if (isLoon || isSurge)
@@ -198,7 +182,6 @@ function API(name = "untitled", debug = false) {
             if (isJSBox) this.cache = JSON.parse($cache.get(this.name) || "{}");
 
             if (isNode) {
-                // create a json for root cache
                 let fpath = "root.json";
                 if (!this.node.fs.existsSync(fpath)) {
                     this.node.fs.writeFileSync(
@@ -211,7 +194,6 @@ function API(name = "untitled", debug = false) {
                 }
                 this.root = {};
 
-                // create a json file with the given name if not exists
                 fpath = `${this.name}.json`;
                 if (!this.node.fs.existsSync(fpath)) {
                     this.node.fs.writeFileSync(
@@ -230,7 +212,6 @@ function API(name = "untitled", debug = false) {
             }
         }
 
-        // store cache
         persistCache() {
             const data = JSON.stringify(this.cache, null, 2);
             if (isQX) $prefs.setValueForKey(data, this.name);
@@ -319,7 +300,6 @@ function API(name = "untitled", debug = false) {
             this.persistCache();
         }
 
-        // notification
         notify(title, content = "", options = {}) {
             const openURL = options["open-url"];
             const mediaURL = options["media-url"];
@@ -345,34 +325,24 @@ function API(name = "untitled", debug = false) {
                 }
             }
             if (isJSBox) {
-                const content_ =
-                    content +
-                    (openURL ? `\n点击跳转: ${openURL}` : "") +
-                    (mediaURL ? `\n多媒体: ${mediaURL}` : "");
                 $push.schedule({
                     title: title,
-                    body: subtitle + content_
+                    body: content
                 });
             }
             if (isNode) {
-                const content_ =
-                    content +
-                    (openURL ? `\n点击跳转: ${openURL}` : "") +
-                    (mediaURL ? `\n多媒体: ${mediaURL}` : "");
-                const msg = subtitle + content_;
                 const noti = require('./sendNotify');
-                noti.sendNotify(title, msg);
+                noti.sendNotify(title, content);
             }
         }
 
-        // other helper functions
-		msg(...t) {
-			t.length > 0 && (this.logs = [...this.logs, ...t]);
-			this.log(t);
-		}
-		
+        msg(...t) {
+            t.length > 0 && (this.logs = [...this.logs, ...t]);
+            this.log(t);
+        }
+
         log(msg) {
-            if (this.debug) console.log(`[${this.name}] LOG: ${this.stringify(msg)}`);
+            console.log(`[${this.name}] LOG: ${this.stringify(msg)}`);
         }
 
         info(msg) {
@@ -392,31 +362,31 @@ function API(name = "untitled", debug = false) {
                 $done(value);
             }
         }
-        
-        parse(object) {
-            if (typeof object === 'string' || object instanceof String)
+
+        parse(obj) {
+            if (typeof obj === 'string' || obj instanceof String)
                 try {
-                    return JSON.parse(object);
+                    return JSON.parse(obj);
                 } catch (err) {
-                    this.msg("parse出错了");
+                    this.msg("parse error:" + obj);
                 }
             else
                 try {
-                    return JSON.parse(JSON.stringify(object));
+                    return JSON.parse(JSON.stringify(obj));
                 } catch (err) {
-                    this.msg("parse出错了");
+                    this.msg("parse error:" + obj);
                 }
         }
-        
-        stringify(obj_or_str) {
-            if (typeof obj_or_str === 'string' || obj_or_str instanceof String)
-                return obj_or_str;
+
+        stringify(obj) {
+            if (typeof obj === 'string' || obj instanceof String)
+                return obj;
             else
                 try {
-                    return JSON.stringify(obj_or_str, null, 2);
+                    return JSON.stringify(obj);
                 } catch (err) {
-                    this.msg("stringify出错了");
+                    this.msg("stringify error:" + obj);
                 }
         }
-    })(name, debug);
+    })(name);
 }
