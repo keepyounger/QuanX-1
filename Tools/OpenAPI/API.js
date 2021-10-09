@@ -5,16 +5,16 @@
  */
 
 function Env(name = "untitled") {
-    
+
     const isQX = typeof $task !== "undefined";
     const isLoon = typeof $loon !== "undefined";
     const isSurge = typeof $httpClient !== "undefined" && !isLoon;
     const isJSBox = typeof require == "function" && typeof $ui != "undefined";
     const isNode = typeof require == "function" && !isJSBox;
-    
+
     function HTTP() {
         const methods = ["GET", "POST", "PUT", "DELETE", "HEAD", "OPTIONS", "PATCH"];
-    
+
         function objectToUrlencoded(object) {
             var str = "";
             for (var i in object) {
@@ -24,14 +24,14 @@ function Env(name = "untitled") {
             }
             return str;
         }
-    
+
         function send(method, options) {
             options = typeof options === "string" ? {
                 url: options
             } : options;
             if (options.body && options.headers) {
                 if (!options.headers['Content-Type']) {
-                   options.headers['Content-Type'] = 'application/x-www-form-urlencoded';
+                    options.headers['Content-Type'] = 'application/x-www-form-urlencoded';
                 }
                 var body = options.body;
                 if (typeof body === 'object' || body instanceof Object) {
@@ -52,9 +52,9 @@ function Env(name = "untitled") {
                 },
                 ...options.events,
             };
-    
+
             events.onRequest(method, options);
-    
+
             let worker;
             if (isQX) {
                 worker = $task.fetch({
@@ -113,7 +113,7 @@ function Env(name = "untitled") {
                         .catch((err) => reject(err));
                 });
             }
-    
+
             let timeoutid;
             const timer = timeout ?
                 new Promise((_, reject) => {
@@ -125,7 +125,7 @@ function Env(name = "untitled") {
                     }, timeout);
                 }) :
                 null;
-    
+
             return (timer ?
                 Promise.race([timer, worker]).then((res) => {
                     clearTimeout(timeoutid);
@@ -134,7 +134,7 @@ function Env(name = "untitled") {
                 worker
             ).then((resp) => events.onResponse(resp));
         };
-    
+
         const http = {};
         methods.forEach(
             (method) =>
@@ -142,11 +142,11 @@ function Env(name = "untitled") {
         );
         return http;
     }
-    
+
     return new(class {
         constructor(name) {
             this.name = name;
-            
+
             this.logs = [];
 
             this.http = HTTP();
@@ -353,8 +353,20 @@ function Env(name = "untitled") {
             console.log(`[${this.name}] ERROR: ${this.stringify(msg)}`);
         }
 
+        timeout(t) {
+            var time = t;
+            if (!t) {
+                time = parseInt(Math.random() * 8000);
+                if (time < 5000) {
+                    time = 5000;
+                }
+            }
+            $.msg("延迟" + time + "ms");
+            return time;
+        }
+
         wait(millisec) {
-            return new Promise((resolve) => setTimeout(resolve, millisec));
+            return new Promise((resolve) => setTimeout(resolve, this.timeout(millisec)));
         }
 
         done(value = {}) {
